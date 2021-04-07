@@ -1,0 +1,17 @@
+CHIRP_LENGTH = 0.05
+NOISE_LENGTH = 0.95
+KWS_FRAME_LENGTH = 1
+SIMULATION_LENGTH = 2
+MUTE_PERIOD_LENGTH = 5
+
+IN_FS = 16000  # 麦克风采样率
+IN_CHANNEL = 1  # 麦克风输入通道数，这里先不要改
+IN_BIT_DEPTH = 16  # 麦克风采样位深
+IN_DEVICE_KEYWORD = None  # Raspi:"snd_rpi_i2s_card",Windows:None(表示使用默认输入设备)
+IN_FRAMES_PER_BUFFER = 2048
+
+OUT_FS = 96000  # 扬声器采样率
+OUT_CHANNEL = 2  # 扬声器输出通道数
+OUT_BIT_DEPTH = 16  # 扬声器采样位深
+OUT_DEVICE_KEYWORD = "Realtek USB2.0"  # Raspi:"USB Audio",Windows:"Realtek USB2.0"
+OUT_FRAMES_PER_BUFFER = 4096
