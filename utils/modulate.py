@@ -7,40 +7,36 @@ import settings
 
 class Modulate():
     f_c = 40000  # 载波频率
-    amplitude = 1  # 归一化幅度
     channel_num = 7  # 声道数
 
     # AM调制
     @classmethod
-    def am_modulate(cls, audio_clip, channel,fs):
+    def am_modulate(cls, audio_clip, channel, fs):
         # 检查
-        if not isinstance(audio_clip, np.ndarray):
-            raise TypeError("Input audio clip must be numpy array!")
-        if audio_clip.dtype not in (np.float64, np.float32, np.float16):
-            raise TypeError("Input audio clip must be float numpy!")
-        if audio_clip.ndim != 1:
-            raise ValueError("Input message must be 1D!")
-        if channel not in (1, 2):
-            raise ValueError("Input channel must be 1 or 2!")
+        # if not isinstance(audio_clip, np.ndarray):
+        #     raise TypeError("Input audio clip must be numpy array!")
+        # if audio_clip.dtype not in (np.float64, np.float32, np.float16):
+        #     raise TypeError("Input audio clip must be float numpy!")
+        # if audio_clip.ndim != 1:
+        #     raise ValueError("Input message must be 1D!")
+        # if channel not in (1, 2):
+        #     raise ValueError("Input channel must be 1 or 2!")
 
         # 生成载波信号
-        t = np.linspace(0,
-                        audio_clip.size / fs,
-                        num=audio_clip.size)
+        t = np.linspace(0, audio_clip.size / fs, num=audio_clip.size)
         carry = np.sin(2 * np.pi * cls.f_c * t)
 
         # # 左声道部分信号生成
-        # re_left = carry * audio_clip  # *为星乘，@为点乘
+        re_left = carry * audio_clip  # *为星乘，@为点乘
 
         # # 右声道部分信号生成
-        # re_right = carry.copy()
-        re_left = re_right = np.ones(len(carry))
+        re_right = carry.copy()
 
         if channel == 1:
             re = re_left + re_right
-            return cls.amplitude * re / 2
+            return re / 2
         else:
-            return (cls.amplitude * re_left, cls.amplitude * re_right)
+            return (re_left, re_right)
 
     @classmethod
     def convolve(cls, x):
@@ -74,9 +70,11 @@ class Modulate():
         pre = 0
         for index in range(count - 1):
             now = split_points[index]
-            convolve_sequence = cls.convolve(f_sequence_array[index][pre + 1:now + 1])
+            convolve_sequence = cls.convolve(
+                f_sequence_array[index][pre + 1:now + 1])
             now_size = convolve_sequence.size
-            res[pre + 1:pre + now_size + 1] = res[pre + 1:pre + now_size + 1] + convolve_sequence
+            res[pre + 1:pre + now_size +
+                1] = res[pre + 1:pre + now_size + 1] + convolve_sequence
             pre = now
         res = np.abs(res)
         res **= 2
@@ -97,8 +95,11 @@ class Modulate():
             now_f_sequence = np.zeros(size, dtype=np.complex128)
 
             # 对称切分频率
-            now_f_sequence[pre_point + 1:point + 1] = f_sequence[pre_point + 1:point + 1]
-            now_f_sequence[size - point - 1: size - pre_point] = f_sequence[size - point - 1: size - pre_point]
+            now_f_sequence[pre_point + 1:point + 1] = f_sequence[pre_point +
+                                                                 1:point + 1]
+            now_f_sequence[size - point - 1:size -
+                           pre_point] = f_sequence[size - point - 1:size -
+                                                   pre_point]
 
             # 处理直流分量
             if pre_point == 0:
@@ -111,7 +112,10 @@ class Modulate():
         return f_sequence_array
 
     @classmethod
-    def split_normal(cls, audio_clip, split_points=np.array([50, 100, 1000, 4000, 10000], dtype=int)):
+    def split_normal(cls,
+                     audio_clip,
+                     split_points=np.array([50, 100, 1000, 1500, 4000, 10000],
+                                           dtype=int)):
         # 时域转化为频域
         fft = np.fft.fft(audio_clip)
         f_sequence = fft
@@ -124,7 +128,8 @@ class Modulate():
     @classmethod
     def SA(cls, audio_clip):
         f_sequence = np.fft.fft(audio_clip)
-        now_points = ans_points = np.array([50, 100, 1000, 4000, 10000], dtype=int)
+        now_points = ans_points = np.array([50, 100, 1000, 4000, 10000],
+                                           dtype=int)
         ans = cls.get_leakage(f_sequence, ans_points)
         T = 150
         tt = 1e-10
@@ -148,7 +153,8 @@ class Modulate():
                 ans = new_ans
                 ans_points = nxt_points
             delta = now_ans - new_ans
-            if delta > 0 or math.exp(delta / T) * 100000 > random.randint(0, 100000):
+            if delta > 0 or math.exp(delta / T) * 100000 > random.randint(
+                    0, 100000):
                 now_points = nxt_points.copy()
             # print(now_points)
             T *= d
@@ -159,26 +165,27 @@ class Modulate():
 
     @classmethod
     def get_array(cls, audio_clip):  # 调制并切分声波
-        # 检查
-        if not isinstance(audio_clip, np.ndarray):
-            raise TypeError("Input audio clip must be numpy array!")
-        if audio_clip.dtype not in (np.float64, np.float32, np.float16):
-            raise TypeError("Input audio clip must be float numpy!")
-        if audio_clip.ndim != 1:
-            raise ValueError("Input message must be 1D!")
+        # # 检查
+        # if not isinstance(audio_clip, np.ndarray):
+        #     raise TypeError("Input audio clip must be numpy array!")
+        # if audio_clip.dtype not in (np.float64, np.float32, np.float16):
+        #     raise TypeError("Input audio clip must be float numpy!")
+        # if audio_clip.ndim != 1:
+        #     raise ValueError("Input message must be 1D!")
 
         # 产生载波
         size = audio_clip.size
-        t = np.linspace(0, size // settings.OUT_FS, num=size)
+        t = np.linspace(0, size / settings.OUT_FS, num=size)
         carry = np.sin(2 * np.pi * cls.f_c * t)
 
         # 切割音频
-        audio_array = cls.split_normal(audio_clip)  # 固定切割点
+        audio_array = audio_clip.copy()
+        # audio_array = cls.split_normal(audio_clip)  # 固定切割点
         # audio_array = cls.SA(audio_clip) # SA优化减少leakage
 
         # 用载波对切割后的音频进行调制
-        for i in range(audio_array.shape[0]):
-            audio_array[i] = audio_array[i] * carry
+        # for i in range(audio_array.shape[0]):
+        #     audio_array[i] = audio_array[i] * carry
         audio_array = np.row_stack((audio_array, carry))
 
         return audio_array

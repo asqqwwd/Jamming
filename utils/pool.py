@@ -106,7 +106,7 @@ class PoolBlockPut(PoolBase):
         self.datas = np.delete(self.datas, range(0, count))
         self.needed_count = count
         if len(self.datas
-               ) < 4*self.needed_count:  # 取后剩余数据不够下一次读取，释放被阻塞线程，让其继续生产数据
+               ) < 4 * self.needed_count:  # 取后剩余数据不够下一次读取，释放被阻塞线程，让其继续生产数据
             self.condition.notify_all()
         self.condition.release()
 
@@ -151,37 +151,34 @@ class PoolNoBlock(PoolBase):
         return re
 
 
-# class CyclePool(BasePool):
-#     def __init__(self, capacity=np.inf):
-#         super(CyclePool, self).__init__(capacity)
-#         self.index = 0  # 获取数据下标缓存
+class PoolCycle(PoolBase):
+    def __init__(self, capacity=np.inf):
+        super(PoolCycle, self).__init__()
+        self.index = 0  # 获取数据下标缓存
 
-#     # 循环读取池子中流数据，若要求数量大于库存，则会读取一部分相同数据
-#     def get(self, frame_count):
-#         if frame_count < 0:
-#             raise ValueError("Input frame count must >= 0!")
+    # 循环读取池子中流数据，若要求数量大于库存，则会读取一部分相同数据
+    def get(self, frame_count):
+        if frame_count < 0:
+            raise ValueError("Input frame count must >= 0!")
 
-#         if not isinstance(frame_count, int):
-#             raise ValueError("Input frame count must be integer!")
+        if not isinstance(frame_count, int):
+            raise ValueError("Input frame count must be integer!")
 
-#         self.rw_mutex.acquire()
 
-#         start_index = self.index
-#         end_index = start_index + frame_count
+        start_index = self.index
+        end_index = start_index + frame_count
 
-#         total_frame_count = self.frames.size
-#         if total_frame_count == 0:
-#             return np.zeros(shape=(frame_count))
+        total_frame_count = self.datas.size
+        if total_frame_count == 0:
+            return np.zeros(shape=(frame_count))
 
-#         re = []
-#         for i in range(start_index, end_index, 1):
-#             re.append(self.frames[i % total_frame_count])
-#         self.index = end_index % total_frame_count
-#         re = np.array(re)
+        re = []
+        for i in range(start_index, end_index, 1):
+            re.append(self.datas[i % total_frame_count])
+        self.index = end_index % total_frame_count
+        re = np.array(re)
 
-#         self.rw_mutex.release()
+        return re
 
-#         return re
-
-#     def get_all(self):
-#         return self.frames.copy()
+    def get_all(self):
+        return self.datas.copy()

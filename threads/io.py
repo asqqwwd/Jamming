@@ -9,7 +9,7 @@ from utils.modulate import Modulate
 
 class PyaudioInput(threading.Thread):
     def __init__(self, in_fs, in_channel, in_bit_depth, in_frames_per_buffer,
-                 in_device_keyword):
+                 in_device_keyword, in_host_api):
         threading.Thread.__init__(self)
         # 初始化配置
         self.daemon = True
@@ -31,7 +31,7 @@ class PyaudioInput(threading.Thread):
         # 为输入设备创建输入流
         self.stream = None
         params["input_device_index"] = self._get_device_index_by_keyword(
-            in_device_keyword)
+            in_device_keyword, in_host_api)
         logging.info("Open input device [index:{}] [name:{}]".format(
             params["input_device_index"], in_device_keyword))
         self.stream = self.p.open(**params)
@@ -55,9 +55,9 @@ class PyaudioInput(threading.Thread):
             # 4.更新系统时间
             true_run_time = time.time() - global_var.start_time
             global_var.run_time += self.in_frames_per_buffer / self.in_fs
-            logging.info("Run time: {}s, {}s, {}s".format(
-                round(true_run_time, 2), round(global_var.run_time, 2),
-                round(true_run_time - global_var.run_time, 2)))
+            # logging.info("Run time: {}s, {}s, {}s".format(
+            #     round(true_run_time, 2), round(global_var.run_time, 2),
+            #     round(true_run_time - global_var.run_time, 2)))
 
         self.stream.stop_stream()
         self.stream.close()
@@ -70,7 +70,7 @@ class PyaudioInput(threading.Thread):
     def _save_data(self, data, save_fillname):
         np.save(save_fillname, data)
 
-    def _get_device_index_by_keyword(self, keyword):
+    def _get_device_index_by_keyword(self, keyword, host_api):
         if keyword is None:
             return None
         p = pyaudio.PyAudio()
@@ -78,14 +78,15 @@ class PyaudioInput(threading.Thread):
             dev_info = p.get_device_info_by_index(i)
             if keyword not in dev_info["name"]:
                 continue
-            if dev_info["maxInputChannels"] > 0:
+            if dev_info["maxInputChannels"] > 0 and dev_info[
+                    "hostApi"] == host_api:
                 return dev_info["index"]
         p.terminate()
 
 
 class PyaudioOutput(threading.Thread):
     def __init__(self, out_fs, out_channel, out_bit_depth, frames_per_buffer,
-                 usb_card_keyword):
+                 out_device_keyword, out_host_api):
         threading.Thread.__init__(self)
         # 初始化配置
         self.daemon = True
@@ -105,7 +106,7 @@ class PyaudioOutput(threading.Thread):
         }
 
         # 为当前所有可用输出设备创建输出流
-        self.devices = OutputDeviceIterable(device_keyword=usb_card_keyword)
+        self.devices = OutputDeviceIterable(out_device_keyword, out_host_api)
         self.streams = StreamsIterable()
         for index, info in self.devices:
             logging.info("Open output device [index:{}] [name:{}]".format(
@@ -129,18 +130,23 @@ class PyaudioOutput(threading.Thread):
 
             # 3.调制
             modulated_output_frames = Modulate.am_modulate(
-                raw_output_frames, 2, self.out_fs)
+                raw_output_frames, self.out_channels, self.out_fs)
+            # modulated_output_frames = Modulate.get_array(raw_output_frames)
 
             # 4.将[-1,1]的浮点数一维数组转换为bytes流输出
-            out_data = Codec.encode_audio_to_bytes(modulated_output_frames,
-                                                   self.out_channels,
-                                                   self.out_bit_depth)
+            out_data = Codec.encode_audio_to_bytes(
+                        modulated_output_frames,
+                        self.out_channels, self.out_bit_depth)
+            # out_data = []
+            # for i in range(modulated_output_frames.shape[0] // 2):
+            #     out_data.append(
+            #         Codec.encode_audio_to_bytes(
+            #             (modulated_output_frames[2 * i],
+            #              modulated_output_frames[2 * i + 1]),
+            #             self.out_channels, self.out_bit_depth))
 
             # 5.分声道输出
             for i, stream in enumerate(self.streams):
-                # data = bytes(
-                #     int(random.random() * 256)
-                # for _ in range(len(raw_output_frames)))
                 stream.write(out_data)  # 此过程会阻塞，直到填入数据被全部消耗
         for stream in self.streams:
             stream.stop_stream()
@@ -186,17 +192,18 @@ class InputDeviceIterable(DeviceIterable):
 
 
 class OutputDeviceIterable(DeviceIterable):
-    def __init__(self, device_keyword="Realtek(R) Audio"):
+    def __init__(self, device_keyword="Realtek(R) Audio", host_api=1):
         super(OutputDeviceIterable, self).__init__()
-        self._get_devices_by_keyword(device_keyword)
+        self._get_devices_by_keyword(device_keyword, host_api)
 
-    def _get_devices_by_keyword(self, device_keyword):
+    def _get_devices_by_keyword(self, device_keyword, host_api):
         p = pyaudio.PyAudio()
         for i in range(p.get_device_count()):
             dev_info = p.get_device_info_by_index(i)
             if device_keyword not in dev_info["name"]:
                 continue
-            if dev_info["maxOutputChannels"] > 0 and dev_info["hostApi"] == 1:
+            if dev_info["maxOutputChannels"] > 0 and dev_info[
+                    "hostApi"] == host_api:
                 self.index_infoss.append((dev_info["index"], dev_info["name"]))
         p.terminate()
 

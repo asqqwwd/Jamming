@@ -10,8 +10,8 @@ from threads.nl import NoiseLib
 
 def run():
     # 启动程序
-    # os.close(sys.stderr.fileno())
     _config_logging()
+    # os.close(sys.stderr.fileno())
     logging.info("Start jamming programmer")
     params1 = {
         "out_fs": settings.OUT_FS,
@@ -33,7 +33,8 @@ def run():
         "in_channel": settings.IN_CHANNEL,
         "in_bit_depth": settings.IN_BIT_DEPTH,
         "in_frames_per_buffer": settings.IN_FRAMES_PER_BUFFER,
-        "in_device_keyword": settings.IN_DEVICE_KEYWORD
+        "in_device_keyword": settings.IN_DEVICE_KEYWORD,
+        "in_host_api":settings.IN_HOST_API
     }
     input_thread = PyaudioInput(**params3)
     params4 = {
@@ -41,7 +42,8 @@ def run():
         "out_channel": settings.OUT_CHANNEL,
         "out_bit_depth": settings.OUT_BIT_DEPTH,
         "frames_per_buffer": settings.OUT_FRAMES_PER_BUFFER,
-        "usb_card_keyword": settings.OUT_DEVICE_KEYWORD
+        "out_device_keyword": settings.OUT_DEVICE_KEYWORD,
+        "out_host_api":settings.OUT_HOST_API
     }
     output_thread = PyaudioOutput(**params4)
     params5 = {

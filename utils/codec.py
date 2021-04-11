@@ -6,12 +6,12 @@ class Codec():
     # 将bytes类型的字节流转换为归一化的float ndarray
     @staticmethod
     def decode_bytes_to_audio(bytes_buffer, channel, bit_depth):
-        # 检查
-        if not isinstance(bytes_buffer, bytes):
-            logging.error("Input buffer must be bytes!")
-            return bytes_buffer
-        if channel not in (1, 2):
-            raise ValueError("Input channel must be 1 or 2!")
+        # # 检查
+        # if not isinstance(bytes_buffer, bytes):
+        #     logging.error("Input buffer must be bytes!")
+        #     return bytes_buffer
+        # if channel not in (1, 2):
+        #     raise ValueError("Input channel must be 1 or 2!")
 
         # 根据输入类型确定split步长
         if bit_depth == 16:
@@ -70,40 +70,11 @@ class Codec():
     # 将float类型的ndarray根据扬声器采样深度编码为可以发送的bytes
     @staticmethod
     def encode_audio_to_bytes(audio_clip, channel, bit_depth):
-        if channel not in (1, 2):
-            raise ValueError("Input channel must be 1 or 2!")
-
-        if channel == 1:
-            # 单声道检查
-            if not isinstance(audio_clip, np.ndarray):
-                raise TypeError("Input audio clip must be numpy array!")
-
-            if audio_clip.dtype not in (np.float64, np.float32, np.float16):
-                raise TypeError("Input audio clip must be float numpy!")
-        else:
-            # 双声道检查
-            audio_clip_left = audio_clip[0]
-            audio_clip_right = audio_clip[1]
-            if not isinstance(audio_clip_left, np.ndarray) or not isinstance(
-                    audio_clip_right, np.ndarray):
-                raise TypeError("Input audio clip must be numpy array!")
-
-            if audio_clip_left.dtype not in (
-                    np.float64, np.float32,
-                    np.float16) or audio_clip_right.dtype not in (np.float64,
-                                                                  np.float32,
-                                                                  np.float16):
-                raise TypeError("Input audio clip must be float numpy!")
-
-            if audio_clip_left.shape != audio_clip_right.shape:
-                raise ValueError("Shape of input audio clip must be the same!")
-
-            # 左右声道填充
-            audio_clip = []
-            for i in range(audio_clip_left.size):
-                audio_clip.append(audio_clip_left[i])
-                audio_clip.append(audio_clip_right[i])
-            audio_clip = np.array(audio_clip)
+        re = bytes()
+        if channel == 2:
+            # 双声道填充
+            audio_clip = np.vstack(
+                (audio_clip[0], audio_clip[1])).T.reshape(-1)
 
         # 根据扬声器采样深度进行转化
         if bit_depth == 16:

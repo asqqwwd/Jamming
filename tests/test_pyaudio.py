@@ -1,46 +1,9 @@
-import pyaudio, random, abc, threading
+import pyaudio, random, abc, threading,wave
 import numpy as np
 from utils.codec import Codec
-
-
-class PyaudioInput(threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self)
-        # 配置输入线程
-        self.daemon = True
-        self.exit_flag = False
-        self.p = pyaudio.PyAudio()
-        params = {
-            "rate": 48000,
-            "channels": 1,
-            "format": self.p.get_format_from_width(2),
-            "input": True,
-            "start": False
-        }
-
-        # 为输入设备创建输入流
-        self.stream = self.p.open(**params)
-        self.start()
-
-    def run(self):
-        self.stream.start_stream()
-        save_frames = np.array([])
-        while not self.exit_flag:
-            data = self.stream.read(12000)  # 此过程会阻塞，直到有足够多的数据
-            # frames = np.frombuffer(data,dtype=np.int16)
-            frames = Codec.decode_bytes_to_audio(data, 1, 16)
-            save_frames = np.concatenate((save_frames, frames))
-            if save_frames.size > 480000:
-                np.save("./tests/save_frames.npy", save_frames)
-                print("**")
-                break
-        self.stream.stop_stream()
-        self.stream.close()
-
-    def stop(self):
-        self.exit_flag = True
-        self.p.terminate()
-        self.join()
+from utils.resampler import Resampler
+from utils.pool import PoolCycle
+from utils.modulate import am_modulate
 
 
 class PyaudioOutput(threading.Thread):
@@ -49,6 +12,7 @@ class PyaudioOutput(threading.Thread):
         # 配置输出线程
         self.daemon = True
         self.exit_flag = False
+        self._load_wave("./waves/raw/id10003-09-2.wav")
         self.p = pyaudio.PyAudio()
         params = {
             "rate": 96000,
@@ -73,7 +37,8 @@ class PyaudioOutput(threading.Thread):
             stream.start_stream()
         while not self.exit_flag:
             for i, stream in enumerate(self.streams):
-                data = bytes(int(random.random() * 256) for _ in range(1024))
+                self.pool.get(1024)
+                # data = bytes(int(random.random() * 256) for _ in range(1024))
                 stream.write(data)  # 此过程会阻塞，直到填入数据被全部消耗
         for stream in self.streams:
             stream.stop_stream()
@@ -83,6 +48,28 @@ class PyaudioOutput(threading.Thread):
         self.exit_flag = True
         self.p.terminate()
         self.join()
+
+    def _load_wave(self, filename):
+        # 根据文件名读取音频文件
+        try:
+            wf = wave.open(filename, "rb")
+            print(wf.getparams())
+            nchannels = wf.getparams().nchannels
+            sampwidth = wf.getparams().sampwidth
+            framerate = wf.getparams().framerate
+            nframes = wf.getparams().nframes
+            bytes_buffer = wf.readframes(nframes)  # 一次性读取所有frame
+
+            audio_clip = Codec.decode_bytes_to_audio(bytes_buffer, nchannels,
+                                                     sampwidth * 8)
+
+            audio_clip = Resampler.resample(audio_clip, framerate, 96000)
+            self.pool = PoolCycle()
+            self.pool.put(audio_clip)
+            
+
+        except:
+            raise TypeError("Can't read wave file!")
 
 
 class DeviceIterable(abc.ABC):
@@ -115,31 +102,6 @@ class OutputDeviceIterable(DeviceIterable):
     # 迭代对象最简单写法，无需迭代器。index自动从0开始递增
     def __getitem__(self, index):
         return self.devices_info[index][-1]
-
-
-class InputDeviceIterable(DeviceIterable):
-    def __init__(self, device_keyword="Realtek(R) Audio", host_api=1):
-        super(InputDeviceIterable, self).__init__(
-        )  # 继承父类构造方法，也可写成DeviceIterable.__init__(self,*args)
-        self._get_devices_by_keyword(device_keyword, host_api)
-
-    def _get_devices_by_keyword(self, device_keyword, host_api):
-        p = pyaudio.PyAudio()
-        for i in range(p.get_device_count()):
-            dev_info = p.get_device_info_by_index(i)
-            if device_keyword not in dev_info["name"]:
-                continue
-            if dev_info["maxInputChannels"] > 0 and dev_info[
-                    "hostApi"] == host_api:
-                self.devices_info.append(dev_info["name"], dev_info["index"])
-        p.terminate()
-
-    # __iter__要求必须返回迭代器。带有yield，当作生成器，即迭代器。
-    def __iter__(self):
-        index = 0
-        for device_info in self.devices_info:
-            yield device_info[-1]
-            index += 1
 
 
 class StreamsIterable():
@@ -175,16 +137,10 @@ class StreamsIterator():
 
 
 def run():
-    pi = PyaudioInput()
+    pi = PyaudioOutput()
     input("Press any key to exit>>>")
     pi.stop()
 
 
 if __name__ == "__main__":
-    pi = PyaudioInput()
-    # po = PyaudioOutput()
-
-    input("Press any key to exit>>>")
-
-    pi.stop()
-    # po.stop()
+    run()

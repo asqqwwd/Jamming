@@ -6,7 +6,7 @@ raw_input_pool = PoolBlockGet(settings.IN_FS *
 processed_input_pool = PoolBlockGet(settings.IN_FS *
                                     (settings.KWS_FRAME_LENGTH))
 last_input_pool = PoolNoBlock()
-noise_pool = PoolBlockPut(1024)
+noise_pool = PoolBlockPut(settings.OUT_FRAMES_PER_BUFFER)
 keyword_pool = PoolNoBlock()
 
 start_time = time.time()  # 系统实际开始运行时间

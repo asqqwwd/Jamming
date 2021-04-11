@@ -22,7 +22,7 @@ class NoiseLib(threading.Thread):
         self.f2 = 1e4
         self.up_chirp_frames, self.down_chirp_frames = self._generate_chirp()
         self.noise_frames = np.array([])
-        # self._load_wave("./waves/raw/no_yes.wav")
+        self._load_wave("./waves/raw/offer.wav")
         # 开始运行线程
         self.start()
 
@@ -34,8 +34,8 @@ class NoiseLib(threading.Thread):
                 (self.up_chirp_frames, self.noise_frames))
 
             # 2.chirp和噪声存入noise池。该过程可能会被阻塞，直到池中数据不够下一次由另外一线程读取
-            global_var.noise_pool.put(chirp_noise_frames)
-            # global_var.noise_pool.put(self.test_wave[-1])  # Test
+            # global_var.noise_pool.put(chirp_noise_frames)
+            global_var.noise_pool.put(self.test_wave[-1])  # Test
 
     def stop(self):
         global_var.noise_pool.release()
