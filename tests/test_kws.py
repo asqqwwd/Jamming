@@ -70,41 +70,62 @@ from pocketsphinx import *
 #     print("Cost:", time.time() - st)
 
 
+# def run():
+#     # Create a decoder with certain model
+#     model_path = get_model_path()
+#     data_path = "./waves/raw"
+#     config = Decoder.default_config()
+#     config.set_string('-hmm', os.path.join(model_path, 'en-us'))
+#     config.set_string('-dict', os.path.join(model_path, 'cmudict-en-us.dict'))
+#     config.set_string('-logfn', './logs/tmp')
+#     config.set_string('-keyphrase', 'alexa')
+#     config.set_float('-kws_threshold', 1e-20)
+#     decoder = Decoder(config)
+#     # decoder.set_kws('keyword', 'keyword.list')
+#     # decoder.set_search('keyword')
+#     decoder.start_utt()
+
+#     st = time.time()
+#     with wave.open(os.path.join(data_path, "offer.wav"), "rb") as rf:
+#         print(rf.getparams())
+#         while True:
+#             buf = rf.readframes(1024)
+#             if buf:
+#                 decoder.process_raw(buf, False, False)
+#             else:
+#                 break
+#             if decoder.hyp() != None:
+#                 print([(seg.word, seg.prob, seg.start_frame, seg.end_frame)
+#                        for seg in decoder.seg()])
+#                 print("Detected keyphrase, restarting search")
+#                 decoder.end_utt()
+#                 decoder.start_utt()
+#     print("Cost:", time.time() - st)
+
 def run():
-    # Create a decoder with certain model
+    
+
+
     model_path = get_model_path()
-    data_path = "./waves/raw"
-    config = Decoder.default_config()
-    config.set_string('-hmm', os.path.join(model_path, 'en-us'))
-    config.set_string('-dict', os.path.join(model_path, 'cmudict-en-us.dict'))
-    config.set_string('-logfn', './logs/tmp')
-    config.set_string('-keyphrase', 'alexa')
-    config.set_float('-kws_threshold', 1e-20)
-    decoder = Decoder(config)
-    # decoder.set_kws('keyword', 'keyword.list')
-    # decoder.set_search('keyword')
-    decoder.start_utt()
 
-    st = time.time()
-    with wave.open(os.path.join(data_path, "offer.wav"), "rb") as rf:
-        print(rf.getparams())
-        while True:
-            buf = rf.readframes(1024)
-            if buf:
-                decoder.process_raw(buf, False, False)
-            else:
-                break
-            if decoder.hyp() != None:
-                print([(seg.word, seg.prob, seg.start_frame, seg.end_frame)
-                       for seg in decoder.seg()])
-                print("Detected keyphrase, restarting search")
-                decoder.end_utt()
-                decoder.start_utt()
-    print("Cost:", time.time() - st)
-
+    speech = LiveSpeech(
+        verbose=False,
+        sampling_rate=16000,
+        buffer_size=2048,
+        no_search=False,
+        full_utt=False,
+        hmm=os.path.join(model_path, 'en-us'),
+        lm=os.path.join(model_path, 'en-us.lm.bin'),
+        dic=os.path.join(model_path, 'cmudict-en-us.dict')
+    )
+    for phrase in speech:
+        print("phrase:", phrase)
+        print(phrase.segments(detailed=True))
 
 
 # def run():
 #     speech = LiveSpeech(lm=False, keyphrase='forward', kws_threshold=1e-20)
 #     for phrase in speech:
 #         print(phrase.segments(detailed=True))
+
+run()

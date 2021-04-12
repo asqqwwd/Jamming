@@ -11,7 +11,6 @@ from threads.nl import NoiseLib
 def run():
     # 启动程序
     _config_logging()
-    # os.close(sys.stderr.fileno())
     logging.info("Start jamming programmer")
     params1 = {
         "out_fs": settings.OUT_FS,

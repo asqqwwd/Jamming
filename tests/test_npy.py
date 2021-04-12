@@ -1,12 +1,12 @@
 import numpy as np
 import matplotlib
 
-matplotlib.use("TkAgg")
+# matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 
 
 def run():
-    x1 = np.load("./tests/save_frames.npy")
+    x1 = np.load("./tests/t.npy")
     # y1 = np.load("./waves/train_y.npy")
     # x2 = np.load("./waves/test_x.npy")
     # y2 = np.load("./waves/test_y.npy")

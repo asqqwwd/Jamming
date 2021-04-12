@@ -1,6 +1,6 @@
 
 
-IS_ON_RASPI = False  # 是否运行在raspi上
+IS_ON_RASPI = True  # 是否运行在raspi上
 if IS_ON_RASPI:
     import os,sys
     os.close(sys.stderr.fileno())

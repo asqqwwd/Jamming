@@ -1,4 +1,4 @@
-import abc, threading, random, logging, time
+import abc, threading, random, logging, time, wave
 import pyaudio
 import numpy as np
 
@@ -39,10 +39,12 @@ class PyaudioInput(threading.Thread):
         self.start()
 
     def run(self):
+        tmp = bytes()
         self.stream.start_stream()
         while not self.exit_flag:
             # 1.读取输入音频数据。此过程会阻塞，直到有足够多的数据
             bytes_buffer = self.stream.read(self.in_frames_per_buffer)
+            tmp += bytes_buffer
 
             # 2.将bytes流输入转换为[-1,1]的浮点数一维数组
             frames = Codec.decode_bytes_to_audio(bytes_buffer,
@@ -67,8 +69,7 @@ class PyaudioInput(threading.Thread):
         self.p.terminate()
         self.join()
 
-    def _save_data(self, data, save_fillname):
-        np.save(save_fillname, data)
+    
 
     def _get_device_index_by_keyword(self, keyword, host_api):
         if keyword is None:
@@ -82,6 +83,13 @@ class PyaudioInput(threading.Thread):
                     "hostApi"] == host_api:
                 return dev_info["index"]
         p.terminate()
+
+    def _save_wav(self,bytes_data):
+        with wave.open("./tests/test.wav","wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes(bytes_data)
 
 
 class PyaudioOutput(threading.Thread):

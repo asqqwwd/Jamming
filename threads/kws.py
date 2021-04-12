@@ -24,7 +24,7 @@ class KeywordSpotting(threading.Thread):
         config.set_string('-dict',
                           os.path.join(model_path,
                                        'cmudict-en-us.dict'))  # 字典路径
-        config.set_string('-keyphrase', 'alexa')
+        config.set_string('-keyphrase', 'friday')
         config.set_float('-kws_threshold', 1e-20)
         config.set_string('-logfn', './logs/tmp')  # INFO输出到其他位置
         self.decoder = Decoder(config)

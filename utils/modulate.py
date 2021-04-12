@@ -30,7 +30,8 @@ class Modulate():
         re_left = carry * audio_clip  # *为星乘，@为点乘
 
         # # 右声道部分信号生成
-        re_right = carry.copy()
+        # re_right = carry.copy()
+        re_right = np.zeros(len(carry))
 
         if channel == 1:
             re = re_left + re_right

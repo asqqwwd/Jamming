@@ -15,8 +15,12 @@ class ActiveNoiseControl(threading.Thread):
         self.chirp_nosie_frames_count = int(chirp_nosie_length * in_fs)
         self.simulation_length = simulation_length
         self.H = np.array([])
+        
+        self.start()
 
     def run(self):
+        self.c1 = 0
+        self.c2 = 0
         while not self.exit_flag:
             # 1.读取输入音频数据。此过程会阻塞，直到有足够多的数据
             frames = global_var.raw_input_pool.get(
@@ -59,25 +63,25 @@ class ActiveNoiseControl(threading.Thread):
 
     def _channel_simulation(self, reality_frames, ideal_frames):
         pass
-        # logging.info("System Clock-{}(s)-Channel simulation".format(
-        #     round(global_var.run_time, 2)))
-        # print(len(reality_frames), len(ideal_frames))
+        logging.info("System Clock-{}(s)-Channel simulation".format(
+            round(global_var.run_time, 2)))
+        print(len(reality_frames), len(ideal_frames))
         # self.tmp = np.concatenate((self.tmp,ideal_frames))
-        # self._save_data(reality_frames,
-        #                 "./tests/saved/train_x{}.npy".format(self.c1))
-        # self._save_data(ideal_frames,
-        #                 "./tests/saved/train_y{}.npy".format(self.c1))
-        # self.c1 += 1
+        #self._save_data(reality_frames,
+        #                "./tests/saved/train_x{}.npy".format(self.c1))
+        #self._save_data(ideal_frames,
+        #                "./tests/saved/train_y{}.npy".format(self.c1))
+        self.c1 += 1
 
     def _eliminate_noise(self, reality_frames, ideal_frames):
-        # logging.info("System Clock-{}(s)-Eliminate noise".format(
-        #     round(global_var.run_time, 2)))
-        # print(len(reality_frames), len(ideal_frames))
-        # self._save_data(reality_frames,
-        #                 "./tests/saved/test_x{}.npy".format(self.c2))
-        # self._save_data(ideal_frames,
-        #                 "./tests/saved/test_y{}.npy".format(self.c2))
-        # self.c2 += 1
+        logging.info("System Clock-{}(s)-Eliminate noise".format(
+            round(global_var.run_time, 2)))
+        print(len(reality_frames), len(ideal_frames))
+        #self._save_data(reality_frames,
+        #                "./tests/saved/test_x{}.npy".format(self.c2))
+        #self._save_data(ideal_frames,
+        #                "./tests/saved/test_y{}.npy".format(self.c2))
+        self.c2 += 1
         return reality_frames
 
     def _envelope(self, frames, chirp):
@@ -122,3 +126,6 @@ class ActiveNoiseControl(threading.Thread):
         else:
             max_index = first_max_index
         return max_index
+
+    def _save_data(self, data, save_fillname):
+        np.save(save_fillname, data)

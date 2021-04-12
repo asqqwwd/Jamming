@@ -17,12 +17,12 @@ class NoiseLib(threading.Thread):
         self.chirp_length = chirp_length
         self.f_lower_bound = 100  # 噪声频率下界
         self.f_upper_bound = 1000  # 噪声频率上界
-        self.num_of_base = 30  # 噪声基底个数
+        self.num_of_base = 10  # 噪声基底个数
         self.f1 = 100
         self.f2 = 1e4
         self.up_chirp_frames, self.down_chirp_frames = self._generate_chirp()
         self.noise_frames = np.array([])
-        self._load_wave("./waves/raw/offer.wav")
+        self._load_wave("./waves/raw/no_yes.wav")
         # 开始运行线程
         self.start()
 
@@ -80,12 +80,12 @@ class NoiseLib(threading.Thread):
             framerate = wf.getparams().framerate
             nframes = wf.getparams().nframes
             bytes_buffer = wf.readframes(nframes)  # 一次性读取所有frame
+            print(wf.getparams())
 
             audio_clip = Codec.decode_bytes_to_audio(bytes_buffer, nchannels,
                                                      sampwidth * 8)
 
             audio_clip = Resampler.resample(audio_clip, framerate, self.out_fs)
-
             self.test_wave = [filename, 2, sampwidth, self.out_fs, audio_clip]
         except:
             raise TypeError("Can't read wave file!")
