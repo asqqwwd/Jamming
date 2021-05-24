@@ -11,6 +11,7 @@
 *.sln.docstates
 *.npy
 *.wav
+*.txt
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -39,6 +40,7 @@ bld/
 .vscode/
 logs/
 waves/
+models/
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
 

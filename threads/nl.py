@@ -18,9 +18,7 @@ class NoiseLib(threading.Thread):
         self.noise_length = noise_length
         self.f_lower_bound = 100  # 噪声频率下界
         self.f_upper_bound = 1000  # 噪声频率上界
-        self.num_of_base = 30  # 噪声基底个数
-        self.f1 = 100
-        self.f2 = 1e4
+        self.num_of_base = 19  # 噪声基底个数
         self.chirp = self._generate_chirp()
         self.noise = np.array([])
         # tmp = Access.load_wave("./waves/raw/offer.wav")
@@ -30,13 +28,14 @@ class NoiseLib(threading.Thread):
         self.start()
 
     def run(self):
+        flag = False
         while not self.exit_flag:
-            # 1.重新生成随机噪声
-            self.noise = self._generate_noise()
-
-            # 2.chirp和噪声存入noise池。该过程可能会被阻塞，直到池中数据不够下一次由另外一线程读取
+            if not flag:
+                global_var.noise_pool.put(
+                    self._generate_simulation_signal(self.out_fs, 19))
+                flag = True
             global_var.noise_pool.put(
-                np.concatenate((self.chirp[0], self.noise)))
+                np.concatenate((self.chirp[0], self._generate_noise())))
             # global_var.noise_pool.put(self.test_wave)  # Test
             # global_var.noise_pool.put(self.noise_frames)  # Test
 
@@ -45,36 +44,37 @@ class NoiseLib(threading.Thread):
         self.exit_flag = True
         self.join()
 
+    # 生成初始测试信号
+    def _generate_simulation_signal(self, fs, length):
+        ss_count = int(fs * length)
+        step_length = length / self.num_of_base
+        step = ss_count // self.num_of_base
+        w_bases = np.linspace(self.f_lower_bound, self.f_upper_bound,
+                              self.num_of_base)
+        ss = np.zeros(ss_count)
+        t = np.linspace(0, step_length, step)
+        for i in range(self.num_of_base):
+            ss[i * step:(i + 1) * step] = np.sin(2 * np.pi * w_bases[i] * t)
+        return ss
+
     # 每次生成不同噪声库噪声
     def _generate_noise(self):
         noise_frames_count = int(self.out_fs * self.noise_length)
-        # random_factor = np.random.rand(self.num_of_base)
-        # print(random_factor)
-        random_factor = np.ones((self.num_of_base))  # Test
-        # random_factor[3:5] = 0
-        random_factor[-8:-3] = 0.5
+        random_factor = np.random.random(self.num_of_base)
+        random_factor2 = np.random.random(self.num_of_base)
+        # random_factor = np.ones(self.num_of_base)  # Test
+
         w_bases = np.linspace(self.f_lower_bound, self.f_upper_bound,
                               self.num_of_base)
         t = np.linspace(0, self.noise_length, num=noise_frames_count)
         random_noise = np.zeros(noise_frames_count)
         for i in range(self.num_of_base):
             random_noise += random_factor[i] * np.sin(
-                2 * np.pi * w_bases[i] * t)
+                2 * np.pi * w_bases[i] * (t - np.pi * random_factor2[i] / 2))
         random_noise = random_noise / np.max(np.abs(random_noise))
-
         return random_noise
 
     def _generate_chirp(self):
-        # t = np.linspace(0,
-        #                 self.chirp_length,
-        #                 num=math.floor(self.out_fs * self.chirp_length))
-        # up_chirp = np.cos(2 * np.pi * self.f1 * t +
-        #                   (np.pi *
-        #                    (self.f2 - self.f1) / self.chirp_length) * t**2)
-        # down_chirp = np.cos(2 * np.pi * self.f2 * t -
-        #                     (np.pi *
-        #                      (self.f2 - self.f1) / self.chirp_length) * t**2)
-        # Test
         up_chirp = down_chirp = np.zeros(int(self.out_fs * self.chirp_length))
         return up_chirp, down_chirp
 
@@ -84,3 +84,7 @@ class NoiseLib(threading.Thread):
     def get_chirp_noise(self, dst_fs, tp=1):
         return Resampler.resample(np.concatenate((self.chirp[tp], self.noise)),
                                   self.out_fs, dst_fs)
+
+    def get_w_bases(self):
+        return np.linspace(self.f_lower_bound, self.f_upper_bound,
+                           self.num_of_base)

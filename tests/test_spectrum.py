@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from pydub import AudioSegment
+import scipy.signal as signal
 
 file_dir = "./tests/waves"
 save_dir = "./tests/spectrums"
-
 
 def run():
     wav_filenames = list(filter(lambda f: ".wav" in f, os.listdir(file_dir)))
@@ -53,4 +53,4 @@ def run():
         figmanager = plt.get_current_fig_manager()
         figmanager.window.state('zoomed')    #最大化
         plt.savefig(os.path.join(save_dir, "{}.jpg".format(filename[:-4])))
-        # plt.show()
+        plt.show()

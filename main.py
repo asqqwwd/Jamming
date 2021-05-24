@@ -6,6 +6,9 @@ from threads.io import PyaudioIO
 # from threads.io2 import SoundDeviceInput, SoundDeviceOutput
 from threads.kws import KeywordSpotting
 from threads.nl import NoiseLib
+import matplotlib.pyplot as plt
+import scipy.signal as signal
+import numpy as np
 
 
 def run():
@@ -46,7 +49,7 @@ def run():
         "out_device_keyword": settings.OUT_DEVICE_KEYWORD,
         "out_host_api": settings.OUT_HOST_API
     }
-    io_thread = PyaudioIO(**params3)
+    # io_thread = PyaudioIO(**params3)
 
     params4 = {
         "in_fs": settings.IN_FS,
@@ -58,10 +61,10 @@ def run():
 
     input("")
     logging.info("Stop jamming programmer")
-    kws_thread.stop()
-    io_thread.stop()
-    anc_thread.stop()
-    nl_thread.stop()
+    # kws_thread.stop()
+    # io_thread.stop()
+    # anc_thread.stop()
+    # nl_thread.stop()
 
 
 def _config_logging():
@@ -86,6 +89,48 @@ def _config_logging():
     logging.getLogger('matplotlib.font_manager').disabled = True  # 禁用字体管理记录器
 
     logging.info("Current log file {}".format(log_filepath))
+
+
+def _compress_dim(fs, base_f, n, spec_n):
+    """
+    fs: sample rate
+    base_f: base of frequency
+    n: target dims after compress
+    spec_n: spectrum at a certain moment
+    """
+    f_list = np.linspace(0, fs // 2, len(spec_n))
+    new_spec_n = spec_n
+    new_spec_n[new_spec_n < 1e-4] = 0
+    re = []
+    for freq in np.arange(base_f, n * base_f + base_f, base_f):
+        index_list = []
+        for i, f in enumerate(f_list):
+            if abs(f - freq) <= 10:
+                index_list.append(i)
+        re.append(np.sum(spec_n[index_list]))
+    re = np.array(re)
+    return re
+
+
+def _decompress_dim(fs, base_f, n, factors):
+    """
+    fs: sample rate
+    base_f: base of frequency
+    n: target dims after decompress
+    factors: polynomial's factors
+    """
+    f_list = np.linspace(0, fs // 2, n)
+    re = np.zeros(n)
+    for freq, factor in zip(
+            np.arange(base_f,
+                      len(factors) * base_f + base_f, base_f), factors):
+        index_list = []
+        for i, f in enumerate(f_list):
+            if abs(f - freq) <= 5:
+                index_list.append(i)
+        print(index_list)
+        re[index_list[len(index_list) // 2]] = factor
+    return re
 
 
 if __name__ == "__main__":

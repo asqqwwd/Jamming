@@ -4,6 +4,7 @@ import librosa
 from utils.access import Access
 from itertools import groupby
 import matplotlib.pyplot as plt
+import scipy.signal as signal
 
 
 class ActiveNoiseControl(threading.Thread):
@@ -23,8 +24,11 @@ class ActiveNoiseControl(threading.Thread):
         self.test_block = 1
 
         # Channel estimator
-        self.H = np.array([])
-        self.V = np.array([])
+        self.w_bases = self.noise_lib.get_w_bases()
+        self.Factor_list = []
+        self.W_list = []
+        for w in self.w_bases:
+            self.W_list.append(self._cal_W(w))
 
         self.start()
 
@@ -33,77 +37,92 @@ class ActiveNoiseControl(threading.Thread):
         # start_index = self._find_start_burr(self.raw_input_frames)
         # print(start_index)
         # start_index -= 8000
-        # tmp = np.array([])
+        tmp = np.array([])
         while not self.exit_flag:
             # 1.读取输入音频数据。此过程会阻塞，直到有足够多的数据
             frames = global_var.raw_input_pool.get(self.frames_count)
+            tmp = np.concatenate((tmp, frames))
+            if global_var.run_time > 30:
+                Access.save_data(tmp, "./input5.py")
+                raise ValueError("***")
 
-            # 2.噪声信号平均功率计算
-            if self.snr_calculate_block_count > 0:
-                self.snr_calculate_block_count -= 1
-                self.noise_power = self._get_snr(frames)
-                print("SNR", self.noise_power)
-            # 3.信道估计
-            elif self.simulation_block_count > 0:
-                self.simulation_block_count -= 1
+            # 2.输入定位
+            chirp_noise = self.noise_lib.get_chirp_noise()
+            located_frames = self._location_by_burr(frames)
+            if abs(len(located_frames) - len(chirp_noise)) > 500:
+                print("Located fail, continue")
+                continue
+            mf, pf = self._align_length(located_frames, chirp_noise)  # 不要去掉毛刺
 
-                located_frames = self._location_by_burr(frames)  # 输入定位
-                # located_frames = self._location_by_chirp(
-                #     frames, self.noise_lib.get_chirp(1))
-
-                self._channel_simulation_slr(located_frames,
-                                             self.noise_lib.get_chirp_noise(
-                                                 self.in_fs),
-                                             tp=1)
-            # 4.噪声消除
-            else:
-                located_frames = self._location_by_burr(frames)  # 输入定位
-                # located_frames = self._location_by_chirp(
-                #     frames, self.noise_lib.get_chirp(1))
-
-                processed_input_frames = self._eliminate_noise(
-                    located_frames,
-                    self.noise_lib.get_chirp_noise(self.in_fs),
-                    tp=1)
-                global_var.processed_input_pool.put(processed_input_frames)
-
-                self.test_block -= 1
-                if self.test_block == 0:
-                    plt.figure(1)
-                    plt.plot(global_var.processed_input_pool.get_all())
-                    plt.show()
-                    break
-
-                # Test
-                # print("Frame", np.mean(np.abs(located_frames)))
-                # print("H", np.mean(self.H))
-                # print("Quality", np.mean(np.abs(processed_input_frames)))
+            # 3.信道估计 or 噪声消除
+            # if global_var.run_time < 10:
+            #     self._channel_simulation(mf[1400:])  # 去除毛刺再输入
+            # else:
+            #     global_var.processed_input_pool.put(
+            #         self._eliminate_noise(mf, pf))
 
     def stop(self):
         global_var.raw_input_pool.release()
         self.exit_flag = True
         self.join()
 
-    def _location_by_chirp(self, raw_input_frames, chirp_frames):
-        # 1.包络检测，并找到最大值点下标。用于同步
-        max_index = self._find_max(
-            self._envelope(raw_input_frames, chirp_frames))
+    def _channel_simulation(self, mixer_frames):
+        # stft and divide
+        _, _, Zxx = signal.stft(mixer_frames,
+                                fs=self.in_fs,
+                                nperseg=self.in_fs // 10,
+                                noverlap=0)
+        spec_mag, _ = self._divide_magphase(Zxx)
+        # 寻找频率中心点
+        gap = spec_mag.shape[1] / len(self.w_bases)
+        index_list = list(
+            map(lambda x: int(x + gap / 2),
+                np.linspace(0, spec_mag.shape[1] - gap, len(self.w_bases))))
+        # 计算各项系数
+        for i, w in zip(index_list, self.w_bases):
+            self.Factor_list.append(
+                np.linalg.inv(self.W_list[i]) @ np.expand_dims(
+                    self._compress_dim(self.in_fs, w, 16, spec_mag.T[i]), 1))
 
-        # 2.从last_input池中读取保存的上轮右半数据
-        last_input_frames = global_var.last_input_pool.get_all()
+    def _eliminate_noise(self, mixer_frames, noise_factor_list):
+        # stft and divide
+        _, _, Zxx = self._stft(mixer_frames)
+        mf_spec_mag, mf_spec_phase = self._divide_magphase(Zxx)
+        # 谱减法
+        spec_n = np.zeros(mf_spec_mag.shape[0])
+        for W, Factor, noise_factor in zip(self.W_list, self.Factor_list,
+                                           noise_factor_list):
+            spec_n += noise_factor * W @ Factor
+        pf_spec_mag = spec_n.repeat(mf_spec_mag.shape[1], axis=1)
 
-        # 3.将本轮数据的右半保存至last_input池
-        global_var.last_input_pool.put(raw_input_frames[max_index:])
+        return self._merge_magphase(np.abs(mf_spec_mag - pf_spec_mag),
+                                    mf_spec_phase)
 
-        # 4.拼接上轮右半数据核本轮左半数据
-        joined_input_frames = np.concatenate(
-            (last_input_frames, raw_input_frames[:max_index]))
+    def _stft(self, frames):
+        """
+        Return: (n_frame,n_fft)
+        """
+        # nperseg窗口大小等于nfft，若nperseg>nfft，则会自动填0，但这会导致无法还原
+        # 窗口小，提升时间分辨率，降低频率分辨率
+        return signal.stft(frames, fs=self.in_fs, nperseg=self.in_fs // 10)
 
-        return joined_input_frames
+    def _istft(self, spectrogram):
+        return signal.istft(spectrogram, fs=self.in_fs)
+
+    def _divide_magphase(self, D):
+        """Separate a complex-valued stft D into its magnitude (S)
+        and phase (P) components, so that `D = S * P`."""
+        S = np.abs(D)
+        P = np.exp(1.j * np.angle(D))
+        return S, P
+
+    def _merge_magphase(self, S, P):
+        """merge magnitude (S) and phase (P) to a complex-valued stft D so that `D = S * P`."""
+        return S * P
 
     def _location_by_burr(self, raw_input_frames):
         # 1.找到毛刺起始和终止位置
-        burr_index = self._find_burr(raw_input_frames)  
+        burr_index = self._find_burr(raw_input_frames)
 
         # 2.从last_input池中读取保存的上轮右半数据
         last_input_frames = global_var.last_input_pool.get_all()
@@ -117,118 +136,29 @@ class ActiveNoiseControl(threading.Thread):
 
         return joined_input_frames
 
-    def _channel_simulation_slr(self, mixer_frames, pure_frames, tp=1):
-        """
-        simple linear regression：认为mixer频率点的y只与pure对应频率x点有关
-        tp: 0 => 估计mixer_k，1 => 估计pure_k
-        Notes: 估计pure_k效果会好很多
-        """
-        logging.info(
-            "System Clock-{:.2f}(s)-Channel simulation [{} {}]".format(
-                global_var.run_time, len(mixer_frames), len(pure_frames)))
-        # align
-        mf, pf = self._align_length(mixer_frames, pure_frames)
-        # stft and divide
-        mf_spec_mag, _ = self._divide_magphase(self._fft(mf))  # mixer
-        pf_spec_mag, _ = self._divide_magphase(self._fft(pf))  # pure
-        # simple liner regression
-        if tp == 0:
-            X = mf_spec_mag.T
-            Y = pf_spec_mag.T
-        else:
-            Y = mf_spec_mag.T
-            X = pf_spec_mag.T
-        beta1 = []
-        beta0 = []
-        for i in range(Y.shape[0]):  # 对每个频率带都做一元线性回归
-            EX = np.mean(X[i])
-            EY = np.mean(Y[i])
-            DX = np.var(X[i])
-            tmp = 0
-            for j in range(Y.shape[1]):
-                tmp += (X[i][j] - EX) * (Y[i][j] - EY)
-            beta1.append(tmp / (DX * (Y.shape[1] - 1)))
-            beta0.append(EY - beta1[-1] * EX)
-        self.H = np.array(beta1)
-        self.V = np.array(beta0)
-
-        # Test
-        n = 13
-        # plt.figure(10 - self.simulation_block_count)
-        # plt.plot(X[n], color="g")
-        # plt.plot(Y[n], color="b")
-        # plt.specgram(pf,
-        #              Fs=16000,
-        #              scale_by_freq=True,
-        #              sides='default')  # 绘制频谱
-        tmp1 = X[n]  # pure
-        tmp2 = Y[n]  # mixer
-        plt.figure(10-self.simulation_block_count)
-        plt.scatter(tmp1,tmp2)
-        plt.figure(20-self.simulation_block_count)
-        plt.plot(tmp2)
-        # plt.plot(tmp1, beta1[n] * tmp1 + beta0[n])
-
-    def _channel_simulation_mlr(self, mixer_frames, pure_frames):
-        """
-        multiple linear regression：认为mixer频率点的y与pure对应频率x点以及附近频率有关
-        """
-        pass
-
-    def _eliminate_noise(self, mixer_frames, pure_frames, tp=1):
-        """
-        tp: 1 => k*mixer-pure; 2 => mixer-k*pure
-        Notes: 不要在频域直接相减，变换到时域后在相减，在频域相减效果很差
-        """
-        logging.info("System Clock-{:.2f}(s)-Elininate noise [{} {}]".format(
-            global_var.run_time, len(mixer_frames), len(pure_frames)))
-        # align
-        mf, pf = self._align_length(mixer_frames, pure_frames)
-        # stft and divide
-        mf_spec_mag, mf_spec_phase = self._divide_magphase(
-            self._fft(mf))  # mixer
-        pf_spec_mag, pf_spec_phase = self._divide_magphase(
-            self._fft(pf))  # pure
-        re_spec_mag = np.zeros(shape=mf_spec_mag.shape)
-        # filter
-        if tp == 0:
-            for i in range(re_spec_mag.shape[0]):
-                re_spec_mag[i] = mf_spec_mag[i] * self.H + self.V
-            # merge and istft
-            return self._ifft(self._merge_magphase(re_spec_mag,
-                                                   mf_spec_phase)) - pf
-        else:
-            for i in range(re_spec_mag.shape[0]):
-                re_spec_mag[i] = pf_spec_mag[i] * self.H + self.V
-            # merge and istft
-            return mf - self._ifft(
-                self._merge_magphase(re_spec_mag, pf_spec_phase))
-
-    def _fft(self, frames):
-        """
-        Return: (n_frame,n_fft)
-        """
-        return librosa.stft(frames,
-                            n_fft=2048,
-                            hop_length=160,
-                            window="hamming").T
-
-    def _ifft(self, frames_spectrum):
-        return librosa.istft(frames_spectrum.T,
-                             hop_length=160,
-                             window="hamming")
-
-    def _divide_magphase(self, D, power=1):
-        """Separate a complex-valued stft D into its magnitude (S)
-        and phase (P) components, so that `D = S * P`."""
-        S = np.abs(D)
-        S **= power
-        P = np.exp(1.j * np.angle(D))
-        return S, P
-
-    def _merge_magphase(self, S, P):
-        """merge magnitude (S) and phase (P) to a complex-valued stft D so that `D = S * P`."""
-        return S * P
+    def _find_burr(self, frames):
+        # 过滤
+        abs_of_frames = np.abs(frames)
+        mean_pow = np.mean(abs_of_frames)
+        index_list = []
+        for i, value in enumerate(abs_of_frames):
+            if value > mean_pow * 4:
+                index_list.append(i)
+        # 分组
+        tmp = []
+        fun = lambda x: x[1] - x[0]
+        for k, g in groupby(enumerate(index_list), fun):
+            l1 = [j for i, j in g]  # 连续数字的列表
+            if len(l1) >= 2:
+                tmp.append((min(l1), max(l1)))
+        if len(tmp) == 0:
+            logging.info("No found burr in this block!")
+            return 0
+        re = 0
+        for i in range(1, len(tmp)):
+            if tmp[i][1] - tmp[i][0] > tmp[re][1] - tmp[re][0]:
+                re = i
+        return tmp[re][0]  # 这里使用最大值定位效果比min好，但仍然使用最小值
 
     def _align_length(self, frames, base_frames):
         base_length = len(base_frames)
@@ -240,77 +170,61 @@ class ActiveNoiseControl(threading.Thread):
             aligned_frames = frames[:base_length]
         return aligned_frames, base_frames
 
-    def _envelope(self, frames, chirp):
-        # 包络检测模块。会将frames分段与chirp信号进行卷积
-        # frames：输入原始信号
-        # chirp：用于解调原始信号的卷积信号
-        # res：返回的卷积结果
-        N1 = len(frames)
-        N2 = len(chirp)
+    def _cal_W(self, base_f):
+        W = np.array([])
+        t = np.linspace(0, 1, num=self.in_fs)
+        s = np.sin(2 * np.pi * base_f * t)
+        for i in range(16):
+            f, _, Zxx = self._stft(np.pow(s, i))
+            if len(W) == 0:
+                W = np.expand_dims(
+                    self._compress_dim(self.in_fs, base_f, 16,
+                                       np.abs(Zxx.T)[Zxx.shape[1] // 2]), 1)
+            else:
+                W = np.concatenate(
+                    (W,
+                     np.expand_dims(
+                         self._compress_dim(self.in_fs, base_f, 16,
+                                            np.abs(Zxx.T)[Zxx.shape[1] // 2]),
+                         1)), 1)
+        return W
 
-        res = []
-        i = 0
-        while i < N1:
-            N = min(N2, N1 - i)
-            frames_freq = np._fft._fft(frames[i:i + N])
-            chirp_freq = np._fft._fft(chirp[0:N])
-            tmp = frames_freq * chirp_freq
-            tmp = list(np.zeros((math.floor(N / 2) + 1))) + list(
-                tmp[math.floor(N / 2) - 1:N + 1] * 2)
-            res = res + list(abs(np._fft._ifft(tmp)))[0:N - 1]
-            i = i + N2
+    def _compress_dim(self, fs, base_f, n, spec_n):
+        """
+        fs: sample rate
+        base_f: base of frequency
+        n: target dims after compress
+        spec_n: spectrum at a certain moment
+        """
+        f_list = np.linspace(0, fs // 2, len(spec_n))
+        new_spec_n = spec_n
+        new_spec_n[new_spec_n < 1e-4] = 0
+        re = []
+        for freq in np.arange(base_f, n * base_f + base_f, base_f):
+            index_list = []
+            for i, f in enumerate(f_list):
+                if abs(f - freq) <= 10:
+                    index_list.append(i)
+            re.append(np.sum(spec_n[index_list]))
+        re = np.array(re)
+        return re
 
-        return np.array(res)
-
-    def _find_max(self, frames):
-        # 若Clip中有一个最大值点，则输出其下标。若有两个值大小差距在阈值(0.3)以内的最大值点，则输出其下标的中位点
-        # frames：需要检测最大值点的输入声音片段
-        # max_index：返回的最大值点下标
-        first_max_index = 0
-        for i in range(1, len(frames)):
-            if frames[i] > frames[first_max_index]:
-                first_max_index = i
-
-        second_max_index = 0
-        for i in range(1, len(frames)):
-            if frames[i] > frames[second_max_index] and i != first_max_index:
-                second_max_index = i
-
-        threshold = 0.3
-        if frames[first_max_index] / frames[second_max_index] <= 1 + threshold:
-            max_index = math.floor((first_max_index + second_max_index) / 2)
-        else:
-            max_index = first_max_index
-        return max_index
-
-    def _find_burr(self, frames):
-        # 过滤
-        abs_of_frames = np.abs(frames)
-        mean_pow = np.mean(abs_of_frames)
-        index_list = []
-        for i, value in enumerate(frames):
-            if value < mean_pow * 0.2:
-                index_list.append(i)
-        # 分组
-        tmp = []
-        fun = lambda x: x[1] - x[0]
-        for k, g in groupby(enumerate(index_list), fun):
-            l1 = [j for i, j in g]  # 连续数字的列表
-            if len(l1) > 50:
-                tmp.append((min(l1), max(l1)))
-        if len(tmp) == 0:
-            logging.info("No found burr in this block!")
-            return 0
-        re = 0
-        for i in range(1, len(tmp)):
-            if tmp[i][1] - tmp[i][0] > tmp[re][1] - tmp[re][0]:
-                re = i
-        # print("New SNR", self._get_snr(frames[tmp[re][0]:tmp[re][1]]))
-        return tmp[re][0]  # 这里使用最大值定位效果比min好，但仍然使用最小值
-
-    def _get_snr(self, frames):  # 计算噪声平均功率
-        n = len(frames)
-        tot = 0
-        for i in range(0, n):
-            tot += frames[i]**2
-        return tot / n
+    def _decompress_dim(self, fs, base_f, n, factors):
+        """
+        fs: sample rate
+        base_f: base of frequency
+        n: target dims after decompress
+        factors: polynomial's factors
+        """
+        f_list = np.linspace(0, fs // 2, n)
+        re = np.zeros(n)
+        for freq, factor in zip(
+                np.arange(base_f,
+                          len(factors) * base_f + base_f, base_f), factors):
+            index_list = []
+            for i, f in enumerate(f_list):
+                if abs(f - freq) <= 5:
+                    index_list.append(i)
+            print(index_list)
+            re[index_list[len(index_list) // 2]] = factor
+        return re
