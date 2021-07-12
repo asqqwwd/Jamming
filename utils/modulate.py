@@ -36,7 +36,7 @@ class Modulate():
 
         if channel == 1:
             re = re_left + re_right
-            return re / 2
+            return re / np.max(np.abs(re))
         else:
             return (re_left, re_right)
 

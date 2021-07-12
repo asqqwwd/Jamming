@@ -82,9 +82,9 @@ class PyaudioIO(threading.Thread):
                                              PyaudioIO.in_bit_depth)
 
         # 2.将一维数组保存入缓冲池
-        global_var.raw_input_pool.put(
-            global_var.test_pool.get(PyaudioIO.in_frames_per_buffer))  # Test
-        # global_var.raw_input_pool.put(frames)
+        # global_var.raw_input_pool.put(
+        #     global_var.test_pool.get(PyaudioIO.in_frames_per_buffer))  # Test
+        global_var.raw_input_pool.put(frames)
 
         # 3.更新系统时间
         true_run_time = time.time() - global_var.start_time
@@ -109,19 +109,11 @@ class PyaudioIO(threading.Thread):
         modulated_output_frames = Modulate.am_modulate(raw_output_frames,
                                                        PyaudioIO.out_channel,
                                                        PyaudioIO.out_fs)
-        # modulated_output_frames = Modulate.get_array(raw_output_frames)
 
         # 4.将[-1,1]的浮点数一维数组转换为bytes流输出
         out_data = Codec.encode_audio_to_bytes(modulated_output_frames,
                                                PyaudioIO.out_channel,
                                                PyaudioIO.out_bit_depth)
-        # out_data = []
-        # for i in range(modulated_output_frames.shape[0] // 2):
-        #     out_data.append(
-        #         Codec.encode_audio_to_bytes(
-        #             (modulated_output_frames[2 * i],
-        #              modulated_output_frames[2 * i + 1]),
-        #             self.out_channel, self.out_bit_depth))
 
         return (out_data, pyaudio.paContinue)
 
@@ -129,16 +121,9 @@ class PyaudioIO(threading.Thread):
         self.stream_in.start_stream()
         self.stream_out.start_stream()
 
-        # Test
-        # audio = AudioSegment.from_file("./offer_record.m4a", "m4a")
-        # audio.export("./offer_record.wav", format="wav")
-        # wave_origin = _load_wave("./tests/offer_origin_long.wav")
-        # wave_origin = wave_origin[len(wave_origin) // 4:len(wave_origin) * 3 // 4]
-        # wave_record = _load_wave("./tests/offer_record.wav")
-        # self.raw_input_frames = Access.load_wave_with_fs(
-        #     "./tests/noise_record.wav", self.in_fs)
-        tmp = Access.load_data("./input.npy")
-        global_var.test_pool.put(tmp)
+        # # Test
+        # tmp = Access.load_data("./test2_phase_random.npy")
+        # global_var.test_pool.put(10 * tmp)
 
     def stop(self):
         self.stream_out.stop_stream()
@@ -163,4 +148,7 @@ class PyaudioIO(threading.Thread):
                 re = dev_info["index"]
                 break
         p.terminate()
+        if not re:
+            logging.info(
+                "Can't find {} device, use default device".format(keyword))
         return re

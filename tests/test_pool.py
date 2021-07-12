@@ -4,43 +4,60 @@ import numpy as np
 import threading,time
 
 def run():
-    a = PoolBlockGet()
-    b = PoolBlockPut()
-    class ThreadA(threading.Thread):
-        def __init__(self):
-            threading.Thread.__init__(self)
+    # a = PoolBlockGet()
+    # b = PoolBlockPut()
+    # class ThreadA(threading.Thread):
+    #     def __init__(self):
+    #         threading.Thread.__init__(self)
 
-        def run(self):
-            for i in range(15):
-                time.sleep(1)
-                a.put(np.random.rand(100))
-                print("A put")
+    #     def run(self):
+    #         for i in range(15):
+    #             time.sleep(1)
+    #             a.put(np.random.rand(100))
+    #             print("A put")
 
        
 
-    class ThreadB(threading.Thread):
-        def __init__(self):
-            threading.Thread.__init__(self)
+    # class ThreadB(threading.Thread):
+    #     def __init__(self):
+    #         threading.Thread.__init__(self)
 
-        def run(self):
-            for i in range(2):
-                tmp = a.get(500)
-                print("B get",type(tmp))
+    #     def run(self):
+    #         for i in range(2):
+    #             tmp = a.get(500)
+    #             print("B get",type(tmp))
 
 
-    p = ThreadA()
-    g = ThreadB()
-    p.daemon = True
+    # p = ThreadA()
+    # g = ThreadB()
+    # p.daemon = True
 
 
 
     
-    g.daemon = True
+    # g.daemon = True
 
-    p.start()
-    g.start()
+    # p.start()
+    # g.start()
 
-    tmp = input("")
+    # tmp = input("")
     # p.stop()
     # g.stop()
+
+    a = PoolBlockGet(1)
+    random_list = np.random.random(133)
+    print(random_list)
+    a.put(random_list)
+
+    print(a.get(6))
+    print(a.get(6))
+    print(a.get(6))
+    print(a.get(6))
+    print(a.get(6))
+    print(a.get(6))
+    print(a.get(6))
+    print(a.get(6))
+    print(a.get(6))
+    print(a.get(6))
+
    

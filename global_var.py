@@ -1,7 +1,8 @@
 import settings, time
 from utils.pool import PoolBlockGet, PoolBlockPut, PoolNoBlock, PoolCycle
 
-raw_input_pool = PoolBlockGet(int(settings.IN_FS * settings.NOISE_LENGTH))
+raw_input_pool = PoolBlockGet(
+    int(settings.IN_FS * 1 / settings.LOWEST_F * settings.NOISE_NUM))
 processed_input_pool = PoolBlockGet(
     int(settings.IN_FS * settings.KWS_FRAME_LENGTH))
 last_input_pool = PoolNoBlock()

@@ -1,41 +1,41 @@
 import threading, wave, math
+from utils.mplot import MPlot
 import numpy as np
 
 import global_var
 from utils.codec import Codec
 from utils.resampler import Resampler
 from utils.access import Access
+from utils.mplot import MPlot
+import matplotlib.pyplot as plt
 
 
 class NoiseLib(threading.Thread):
-    def __init__(self, out_fs, chirp_length, noise_length):
+    def __init__(self, out_fs, chirp_length, lowest_f, noise_num):
         threading.Thread.__init__(self)
         # 配置噪声库
         self.daemon = True
         self.exit_flag = False  # 线程退出标志
         self.out_fs = out_fs
         self.chirp_length = chirp_length
-        self.noise_length = noise_length
-        self.f_lower_bound = 100  # 噪声频率下界
-        self.f_upper_bound = 1000  # 噪声频率上界
-        self.num_of_base = 19  # 噪声基底个数
+        self.f1 = 100
+        self.f2 = 10e3
+
+        self.lowest_f = lowest_f
+        self.noise_num = noise_num
+        self.noise_bases_num = 2
+        self.noise_length = 1 / self.lowest_f
+
         self.chirp = self._generate_chirp()
-        self.noise = np.array([])
-        # tmp = Access.load_wave("./waves/raw/offer.wav")
-        # tmp = tmp[len(tmp) // 4:len(tmp) // 4 * 3]
-        # self.test_wave = Resampler.resample(tmp, 44100, 96000)
+        self.noise_bases = self._generate_noise_bases()
+        self.keys = np.array([])
+
         # 开始运行线程
         self.start()
 
     def run(self):
-        flag = False
         while not self.exit_flag:
-            if not flag:
-                global_var.noise_pool.put(
-                    self._generate_simulation_signal(self.out_fs, 19))
-                flag = True
-            global_var.noise_pool.put(
-                np.concatenate((self.chirp[0], self._generate_noise())))
+            global_var.noise_pool.put(self._concatenate_chirp_noise())
             # global_var.noise_pool.put(self.test_wave)  # Test
             # global_var.noise_pool.put(self.noise_frames)  # Test
 
@@ -44,47 +44,122 @@ class NoiseLib(threading.Thread):
         self.exit_flag = True
         self.join()
 
-    # 生成初始测试信号
-    def _generate_simulation_signal(self, fs, length):
-        ss_count = int(fs * length)
-        step_length = length / self.num_of_base
-        step = ss_count // self.num_of_base
-        w_bases = np.linspace(self.f_lower_bound, self.f_upper_bound,
-                              self.num_of_base)
-        ss = np.zeros(ss_count)
-        t = np.linspace(0, step_length, step)
-        for i in range(self.num_of_base):
-            ss[i * step:(i + 1) * step] = np.sin(2 * np.pi * w_bases[i] * t)
-        return ss
+    # 生成噪声基底
+    def _generate_noise_bases(self):
+        re = []
+        t = np.linspace(0, self.noise_length,
+                        int(self.out_fs * self.noise_length))
 
-    # 每次生成不同噪声库噪声
-    def _generate_noise(self):
-        noise_frames_count = int(self.out_fs * self.noise_length)
-        random_factor = np.random.random(self.num_of_base)
-        random_factor2 = np.random.random(self.num_of_base)
-        # random_factor = np.ones(self.num_of_base)  # Test
+        # # Phase
+        # # random_factors = [0.77968736, 2.70990493]
+        # # random_factors = []
+        # # for _ in range(2):
+        # #     tmp = []
+        # #     for _ in range(4):
+        # #         tmp.append(np.round(np.random.rand()*np.pi,3))
+        # #     random_factors.append(tmp)
+        # # print(random_factors)
+        # # random_factors = [[0.345, 0.559, 0.634, 2.522], [2.108, 1.028, 0.699, 2.015]]
+        # random_factors = [[0.345, 0, 0, 0], [2.108, 0, 0, 0]]
+        # for rf in random_factors:
+        #     # tmp =  np.sin(2 * np.pi * self.lowest_f * t + rf[0]) +\
+        #     # np.sin(2 * np.pi * 2 * self.lowest_f * t + rf[1]) +\
+        #     # np.sin(2 * np.pi * 4 * self.lowest_f * t + rf[2]) +\
+        #     # np.sin(2 * np.pi * 8 * self.lowest_f * t + rf[3])
+        #     tmp = np.sin(2 * np.pi * self.lowest_f * t + rf[0])
+        #     # tmp = tmp / np.max(np.abs(tmp))  # 加上这个会导致基功率不一致，不会改善振铃效应
+        #     re.append(tmp)
 
-        w_bases = np.linspace(self.f_lower_bound, self.f_upper_bound,
-                              self.num_of_base)
-        t = np.linspace(0, self.noise_length, num=noise_frames_count)
-        random_noise = np.zeros(noise_frames_count)
-        for i in range(self.num_of_base):
-            random_noise += random_factor[i] * np.sin(
-                2 * np.pi * w_bases[i] * (t - np.pi * random_factor2[i] / 2))
-        random_noise = random_noise / np.max(np.abs(random_noise))
-        return random_noise
+        # # Freq and mag
+        # random_factors = [[0.61, 0.36, 0.99, 0.35, 0.21], [1, 0, 0, 0, 0]]
+        # for rf in random_factors:
+        #     tmp = rf[0] * np.sin(2 * np.pi * self.lowest_f * t) -\
+        #         rf[1] * np.sin(2 * np.pi * 2 * self.lowest_f * t) +\
+        #         rf[2] * np.sin(2 * np.pi * 4 * self.lowest_f * t) +\
+        #         rf[3] * np.sin(2 * np.pi * 8 * self.lowest_f * t) -\
+        #         rf[4] * np.sin(2 * np.pi * 16 * self.lowest_f * t)
+        #     tmp = tmp / np.max(np.abs(tmp))
+        #     re.append(tmp)
+
+        # Continuous change phase
+        random_factors = []
+        w_bases = np.arange(100, 3100, 100)
+        for i in range(self.noise_bases_num):
+            # random_factors.append(2 * np.random.randint(0, 2, len(w_bases)) -
+            #                       1)
+            # Test
+            if i == 0:
+                random_factors.append(
+                    np.array([
+                        1, -1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1, -1, 1, -1,
+                        1, 1, 1, -1, 1, 1, 1, -1, -1, 1, 1, -1, 1, 1, -1
+                    ]))
+            else:
+                random_factors.append(
+                    np.array([
+                        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0
+                    ]))
+        for rfs in random_factors:
+            tmp = np.zeros(len(t))
+            for w, rf in zip(w_bases, rfs):
+                tmp += rf * np.sin(2 * np.pi * w * t)
+            tmp = tmp / np.max(np.abs(tmp))
+            re.append(tmp)
+
+        return re
 
     def _generate_chirp(self):
-        up_chirp = down_chirp = np.zeros(int(self.out_fs * self.chirp_length))
+        t = np.linspace(0,
+                        self.chirp_length,
+                        num=int(self.out_fs * self.chirp_length))
+        up_chirp = np.cos(2 * np.pi * self.f1 * t +
+                          (np.pi *
+                           (self.f2 - self.f1) / self.chirp_length) * t**2)
+        down_chirp = np.cos(2 * np.pi * self.f2 * t -
+                            (np.pi *
+                             (self.f2 - self.f1) / self.chirp_length) * t**2)
         return up_chirp, down_chirp
 
-    def get_chirp(self, tp=1):
-        return self.chirp[tp]
+    # 随机拼接噪声
+    def _concatenate_chirp_noise(self):
+        # 生成随机密钥
+        # self.keys = np.random.randint(self.noise_bases_num,
+        #                                    size=self.noise_num)
+        # self.keys = np.array([
+        #     1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0,
+        #     0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1,
+        #     1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1,
+        #     0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1,
+        #     1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0,
+        #     0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1,
+        #     0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1,
+        #     0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 0,
+        #     0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0,
+        #     1, 1
+        # ])
+        # self.keys = np.array([0] * 50 + [1] * 50 + [0] * 50 + [1] * 50)
+        self.keys = []
+        while len(self.keys) < self.noise_num:
+            self.keys += [0] * 20 + [0] * 20
 
-    def get_chirp_noise(self, dst_fs, tp=1):
-        return Resampler.resample(np.concatenate((self.chirp[tp], self.noise)),
-                                  self.out_fs, dst_fs)
+        # 根据key生成noise
+        re = np.array([])
+        for key in self.keys:
+            re = np.concatenate((re, self.noise_bases[key]))
 
-    def get_w_bases(self):
-        return np.linspace(self.f_lower_bound, self.f_upper_bound,
-                           self.num_of_base)
+        # 拼接chirp和noise
+        re = re
+        # re = np.concatenate((self.chirp[0], re))
+        # re = np.concatenate((np.zeros(len(self.chirp[0])), re))
+        # re = np.zeros(len(re))
+        # re[0] = 1
+        # re = self.chirp[0].copy()
+
+        return re
+
+    def get_chirp_with_fs(self, fs, tp=1):
+        return Resampler.resample(self.chirp[tp], self.out_fs, fs)
+
+    def get_keys(self):
+        return self.keys

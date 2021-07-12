@@ -1,6 +1,6 @@
 import threading, os
 import numpy as np
-from pocketsphinx import DefaultConfig, Decoder, get_model_path, get_data_path
+# from pocketsphinx import DefaultConfig, Decoder, get_model_path, get_data_path
 from scipy import signal
 
 import global_var
