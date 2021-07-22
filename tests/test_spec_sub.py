@@ -16,15 +16,13 @@ def run():
     base_length = 0.01
     base_num = int(base_length * fs)
 
-    filename_list = [
-        "HW_Sin1k+Speaker.npy", "Mi_Sin1k+Speaker.npy",
-        "HW_Base100+Speaker.npy", "Mi_Base100+Speaker.npy"
-    ]
     # filename_list = [
-    #     "Mi_Test.npy"
+    #     "HW_Sin1k+Speaker.npy", "Mi_Sin1k+Speaker.npy",
+    #     "HW_Base100+Speaker.npy", "Mi_Base100+Speaker.npy"
     # ]
+    filename_list = ["HW_Base5k+Speaker.wav", "HW_Base8k+Speaker.wav"]
     for filename in filename_list:
-        m = Access.load_data(filename)
+        m = Access.load_wave(filename)
         # MPlot.plot_specgram(m,fs)
         # MPlot.plot(m)
         # raise ValueError("**")
@@ -32,18 +30,19 @@ def run():
         # # 非理想滤波滤波
         # lowpass_filter = signal.butter(8, 0.3, 'lowpass')  # 2*5k/48k=0.2
         # m = signal.filtfilt(lowpass_filter[0], lowpass_filter[1], m)
-        # 理想滤波
-        m_sp = np.fft.fft(m)
-        S, P = np.abs(m_sp), np.exp(1.j * np.angle(m_sp))
-        cut_off_freq = 5e3
-        S[int(cut_off_freq / fs * len(m)):int((fs - cut_off_freq) / fs * len(m))] = 0
-        m = np.fft.ifft(S * P).real
+        # # 理想滤波
+        # m_sp = np.fft.fft(m)
+        # S, P = np.abs(m_sp), np.exp(1.j * np.angle(m_sp))
+        # cut_off_freq = 5e3
+        # S[int(cut_off_freq / fs * len(m)):int((fs - cut_off_freq) / fs *
+        #                                       len(m))] = 0
+        # m = np.fft.ifft(S * P).real
 
         # MPlot.subplot([m, m_filtered])
         # raise ValueError("**")
 
         # 信道估计
-        index = 30377
+        index = 0
         base = m[index:index + base_num]
         # MPlot.plot(base)
         # raise ValueError("**")
@@ -71,7 +70,7 @@ def run():
         MPlot.plot_together([m, results])
         rvv = np.var(m) / np.var(results)
         print("{}: {}".format(filename, rvv))
-        # Access.save_wave(results, "./HW_AncSin1k.wav", 1, 2, fs)
+        Access.save_wave(results, "./{}_Test.wav".format(filename), 1, 2, fs)
 
 
 # 生成噪声基底

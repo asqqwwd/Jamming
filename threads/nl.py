@@ -7,7 +7,9 @@ from utils.codec import Codec
 from utils.resampler import Resampler
 from utils.access import Access
 from utils.mplot import MPlot
+from utils.mfilter import MFilter
 import matplotlib.pyplot as plt
+import scipy.signal as signal
 
 
 class NoiseLib(threading.Thread):
@@ -36,6 +38,7 @@ class NoiseLib(threading.Thread):
     def run(self):
         while not self.exit_flag:
             global_var.noise_pool.put(self._concatenate_chirp_noise())
+            # global_var.noise_pool.put(self.white_noise)
             # global_var.noise_pool.put(self.test_wave)  # Test
             # global_var.noise_pool.put(self.noise_frames)  # Test
 
@@ -48,7 +51,7 @@ class NoiseLib(threading.Thread):
     def _generate_noise_bases(self):
         re = []
         t = np.linspace(0, self.noise_length,
-                        int(self.out_fs * self.noise_length))
+                        int(self.out_fs * self.noise_length) + 1)
 
         # # Phase
         # # random_factors = [0.77968736, 2.70990493]
@@ -81,32 +84,40 @@ class NoiseLib(threading.Thread):
         #     tmp = tmp / np.max(np.abs(tmp))
         #     re.append(tmp)
 
-        # Continuous change phase
-        random_factors = []
-        w_bases = np.arange(100, 3100, 100)
-        for i in range(self.noise_bases_num):
-            # random_factors.append(2 * np.random.randint(0, 2, len(w_bases)) -
-            #                       1)
-            # Test
-            if i == 0:
-                random_factors.append(
-                    np.array([
-                        1, -1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1, -1, 1, -1,
-                        1, 1, 1, -1, 1, 1, 1, -1, -1, 1, 1, -1, 1, 1, -1
-                    ]))
-            else:
-                random_factors.append(
-                    np.array([
-                        1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0
-                    ]))
-        for rfs in random_factors:
-            tmp = np.zeros(len(t))
-            for w, rf in zip(w_bases, rfs):
-                tmp += rf * np.sin(2 * np.pi * w * t)
-            tmp = tmp / np.max(np.abs(tmp))
-            re.append(tmp)
+        # # Continuous change phase
+        # random_factors = []
+        # w_bases = np.arange(100, 3100, 100)
+        # for i in range(self.noise_bases_num):
+        #     # random_factors.append(2 * np.random.randint(0, 2, len(w_bases)) -
+        #     #                       1)
+        #     # Test
+        #     if i == 0:
+        #         random_factors.append(
+        #             np.array([
+        #                 1, -1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1, -1, 1, -1,
+        #                 1, 1, 1, -1, 1, 1, 1, -1, -1, 1, 1, -1, 1, 1, -1
+        #             ]))
+        #     else:
+        #         random_factors.append(
+        #             np.array([
+        #                 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        #                 0, 0
+        #             ]))
+        # for rfs in random_factors:
+        #     tmp = np.zeros(len(t))
+        #     for w, rf in zip(w_bases, rfs):
+        #         tmp += rf * np.sin(2 * np.pi * w * t)
+        #     tmp = tmp / np.max(np.abs(tmp))
+        #     re.append(tmp)
 
+        # # white noise
+        re.append(
+            MFilter.ideal_filter(np.random.normal(0, 1, len(t)), self.out_fs))
+        re.append(
+            MFilter.ideal_filter(np.random.normal(0, 1, len(t)), self.out_fs))
+
+        for r in re:
+            r = r[:-1]
         return re
 
     def _generate_chirp(self):
@@ -141,7 +152,7 @@ class NoiseLib(threading.Thread):
         # self.keys = np.array([0] * 50 + [1] * 50 + [0] * 50 + [1] * 50)
         self.keys = []
         while len(self.keys) < self.noise_num:
-            self.keys += [0] * 20 + [0] * 20
+            self.keys += [1] * 20 + [1] * 20
 
         # 根据key生成noise
         re = np.array([])

@@ -1,4 +1,5 @@
 import math, logging, global_var, threading, os, time
+from utils.statistics import Statistics
 from threads.nl import NoiseLib
 from sklearn.cluster import KMeans
 
@@ -49,10 +50,10 @@ class ActiveNoiseControl(threading.Thread):
             tmp = np.concatenate((tmp, frames))
             if global_var.run_time > 15:
                 MPlot.plot(tmp)
-                # MPlot.plot_specgram(tmp,self.in_fs,tp="db")
-                # MPlot.plot_specgram(tmp,self.in_fs,tp="mag")
-                # Access.save_data(tmp,"./Mi_Test.npy")
-                # Access.save_wave(tmp, "./Mi_Sin1k+Speaker.wav", 1, 2, self.in_fs)
+                # tmp = tmp[20000:]
+                Statistics.eval_relative_DB(tmp)
+                Statistics.eval_stablity(tmp)
+                Access.save_wave(tmp, "./HW_Impulse1_Base5k.wav", 1, 2, self.in_fs)
                 raise ValueError("**")
 
             # # 定位

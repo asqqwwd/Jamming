@@ -6,7 +6,7 @@ import numpy as np
 class Resampler():
     @classmethod
     def resample(cls, frames, org_fs, dst_fs):
-        if org_fs == dst_fs:
+        if int(org_fs) == int(dst_fs):
             return frames
         else:
             return signal.resample(frames, (int(

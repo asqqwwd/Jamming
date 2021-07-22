@@ -53,7 +53,7 @@ class MPlot():
                                     nperseg=fs // 10)  # 窗口越小，频率泄露越严重
             plt.pcolormesh(t,
                            f,
-                           10 * np.log10(np.abs(Zxx)),
+                           np.abs(Zxx),
                            shading='gouraud',
                            cmap="binary")
             plt.colorbar()

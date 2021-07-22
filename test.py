@@ -14,6 +14,8 @@
 # from tests.test_ring_effect import run
 # from tests.test_spec_sub import run
 from tests.test_LMS import run
+# from tests.test_LTI import run
+# from tests.test_spec_sub import run
 
 run()
 

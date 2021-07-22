@@ -34,8 +34,10 @@ def run():
 
     # base = generate_noise_bases(1 / 100, 48000)
     # MPlot.plot(base)
-    # # MPlot.plot(np.tile(base,2))
-    # Access.save_wave(np.tile(base, 2000), "./PB_Sin1k.wav", 1, 2, 48000)
+    # MPlot.plot(np.tile(base, 2))
+    # tmp = np.concatenate((np.zeros(48000), np.tile(base, 3)))
+    # tmp = np.tile(tmp, 20)
+    # Access.save_wave(tmp, "./PB_Impulse3_Sin1k.wav", 1, 2, 48000)
     # # # h = [0] * 40 + [1] + [0.8] * 10 + [0.5] * 10 + [0.3] * 10 + [0.1] * 10
     # # # b = np.convolve(a, h, mode="same")
     # # # MPlot.subplot([a, b])
@@ -161,23 +163,6 @@ def _decompress_dim(fs, base_f, n, factors):
         print(index_list)
         re[index_list[len(index_list) // 2]] = factor
     return re
-
-
-def align_length(frames, base_length, tp=0):
-    '''
-    tp=0: left padding zeros
-    tp=1: right padding zeros
-    '''
-    aligned_frames = None
-    if len(frames) < base_length and tp == 0:
-        aligned_frames = np.concatenate(
-            (np.zeros(base_length - len(frames)), frames))
-    if len(frames) < base_length and tp == 1:
-        aligned_frames = np.concatenate(
-            (frames, np.zeros(base_length - len(frames))))
-    else:
-        aligned_frames = frames[:base_length]
-    return aligned_frames
 
 
 # 生成噪声基底

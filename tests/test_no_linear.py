@@ -1,5 +1,6 @@
 import numpy as np
 from utils.mplot import MPlot
+from utils.mfilter import MFilter
 import scipy.signal as signal
 
 
@@ -12,7 +13,9 @@ def run():
     length = 1
     t = np.linspace(0, length, num=int(fs * length))
 
-    a =  np.sin(2 * np.pi * 10e3 * t+np.sin(2 * np.pi * 500 * t))
+    # a =  np.sin(2 * np.pi * 10e3 * t+np.sin(2 * np.pi * 500 * t))
+    a = np.random.normal(0,1,len(t))
+    a = MFilter.ideal_filter(a,fs)
     # b = np.sin(2 * np.pi * 40e3 * t)
     # h = [0] + [1] + [0.5]
     h = [0] * 400 + [1] + [0.8] * 100 + [-0.5] * 100 + [0.3] * 100 + [0.1] * 100
